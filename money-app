@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生成 App 图标</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f5f5f5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    flex-direction: column;
+    gap: 20px;
+  }
+  。card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,.1);
+  }
+  h2 { margin: 0 0 8px; }
+  p { color: #888; font-size: 14px; margin: 0 0 20px; }
+  canvas { border-radius: 16px; margin: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  。previews { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; }
+  button {
+    padding: 14px 32px;
+    border: none;
+    border-radius: 12px;
+    background: #3b82f6;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    margin: 8px;
+  }
+  button:active { transform: scale(.97); }
+  。note { font-size: 12px; color: #aaa; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2>📱 生成 App 图标</h2>
+  <p>点击按钮下载图标文件到项目文件夹</p>
+  <div class="previews">
+    <div><canvas id="c192" width="192" height="192"></canvas><div>192×192</div></div>
+    <div><canvas id="c512" width="512" height="512"></canvas><div>512×512</div></div>
+  </div>
+  <div>
+    <button onclick="downloadIcon(192)">下载 192px 图标</button>
+    <button onclick="downloadIcon(512)">下载 512px 图标</button>
+    <button onclick="downloadBoth()">⬇ 一键下载全部</button>
+  </div>
+  <p class="note">下载后放到 expense-tracker 文件夹即可</p>
+</div>
+
+<script>
+function drawIcon(canvasId, size) {
+  const c = document.getElementById(canvasId);
+  const ctx = c.getContext('2d');
+  const s = size;
+
+  // Gradient background
+  const g = ctx.createLinearGradient(0, 0, s, s);
+  g.addColorStop(0, '#3b82f6');
+  g.addColorStop(1, '#1d4ed8');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, s, s, s * 0.22);
+  ctx.fill();
+
+  // Inner circle
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.beginPath();
+  ctx.arc(s * 0.5, s * 0.42, s * 0.28, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Money bag emoji
+  ctx.font = `${s * 0.38}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('💰', s * 0.5, s * 0.43);
+
+  // Text
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${s * 0.13}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.fillText('日常记账', s * 0.5, s * 0.8);
+}
+
+function downloadIcon(size) {
+  const c = document.getElementById('c' + size);
+  c.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `icon-${size}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+function downloadBoth() {
+  downloadIcon(192);
+  setTimeout(() => downloadIcon(512), 300);
+}
+
+drawIcon('c192', 192);
+drawIcon('c512', 512);
+</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>日常记账</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="日常记账">
+<meta name="theme-color" content="#3b82f6">
+<meta name="description" content="记录日常收入和支出">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #f5f5f5;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --sub: #888;
+    --income: #22c55e;
+    --expense: #ef4444;
+    --primary: #3b82f6;
+    --border: #e5e5e5;
+    --shadow: 0 1px 3px rgba(0,0,0,.08);
+    --tab-height: 64px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .container { max-width: 480px; margin: 0 auto; padding: 16px 16px calc(var(--tab-height) + 24px); }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 24px 0 8px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: .5px;
+  }
+
+  /* Tab Bar */
+  .tab-bar {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    display: flex;
+    z-index: 50;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tab-bar button {
+    flex: 1;
+    padding: 10px 0 6px;
+    border: none;
+    background: transparent;
+    font-size: 11px;
+    color: var(--sub);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    transition: color .15s;
+  }
+  .tab-bar button .tb-icon { font-size: 22px; }
+  .tab-bar button.active { color: var(--primary); font-weight: 600; }
+
+  /* Pages */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Balance Card */
+  .balance-card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+    text-align: center;
+  }
+  .balance-label { font-size: 13px; color: var(--sub); margin-bottom: 4px; }
+  .balance-amount {
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -1px;
+  }
+  .balance-amount.positive { color: var(--income); }
+  .balance-amount.negative { color: var(--expense); }
+  .balance-row {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    margin-top: 16px;
+  }
+  .balance-item { text-align: center; }
+  .balance-item .label { font-size: 12px; color: var(--sub); }
+  .balance-item .value { font-size: 18px; font-weight: 600; }
+  .balance-item .value.in { color: var(--income); }
+  .balance-item .value.out { color: var(--expense); }
+
+  /* Quick Add */
+  .quick-add {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .quick-add button {
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .1s;
+  }
+  .quick-add button:active { transform: scale(.97); }
+  .btn-income { background: #dcfce7; color: #166534; }
+  .btn-expense { background: #fef2f2; color: #991b1b; }
+
+  /* Form Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.4);
+    display: flex;
+    align-items: flex-end;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s;
+  }
+  .modal-overlay.active { opacity: 1; pointer-events: auto; }
+  .modal {
+    background: var(--card);
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    border-radius: 20px 20px 0 0;
+    padding: 24px 20px 32px;
+    transform: translateY(100%);
+    transition: transform .25s ease-out;
+  }
+  .modal-overlay.active .modal { transform: translateY(0); }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .modal-header h3 { font-size: 18px; }
+  .modal-close {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .form-group { margin-bottom: 16px; }
+  .form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sub);
+    margin-bottom: 6px;
+  }
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 16px;
+    background: var(--bg);
+    outline: none;
+    transition: border-color .15s;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: var(--primary); }
+  .type-toggle {
+    display: flex;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1.5px solid var(--border);
+  }
+  .type-toggle button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--bg);
+    transition: .15s;
+  }
+  .type-toggle button.active-income { background: var(--income); color: #fff; }
+  .type-toggle button.active-expense { background: var(--expense); color: #fff; }
+  .btn-save {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+
+  /* Filters */
+  .filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+  }
+  .filters button {
+    padding: 6px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    background: var(--card);
+    font-size: 13px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .filters button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  .month-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: var(--sub);
+  }
+  .month-summary span { font-weight: 600; }
+  .month-summary .in { color: var(--income); }
+  .month-summary .out { color: var(--expense); }
+
+  /* Transaction List */
+  .tx-list { display: flex; flex-direction: column; gap: 8px; }
+  .tx-item {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: var(--shadow);
+  }
+  .tx-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .tx-icon.income { background: #dcfce7; }
+  .tx-icon.expense { background: #fef2f2; }
+  .tx-info { flex: 1; min-width: 0; }
+  .tx-category { font-size: 14px; font-weight: 600; }
+  .tx-desc { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .tx-date { font-size: 11px; color: var(--sub); }
+  .tx-right { text-align: right; flex-shrink: 0; }
+  .tx-amount { font-size: 16px; font-weight: 700; }
+  .tx-amount.income { color: var(--income); }
+  .tx-amount.expense { color: var(--expense); }
+  .tx-delete {
+    width: 28px; height: 28px;
+    border: none;
+    background: transparent;
+    color: #ccc;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 6px;
+  }
+  .tx-delete:hover { color: var(--expense); background: #fef2f2; }
+
+  .empty {
+    text-align: center;
+    padding: 48px 16px;
+    color: var(--sub);
+  }
+  .empty .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty p { font-size: 14px; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-120px);
+    background: #1a1a1a;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    z-index: 200;
+    transition: transform .2s;
+    pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ====== Login Screen ====== */
+  #loginScreen {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    flex-direction: column;
+    padding: 24px;
+  }
+  #loginScreen.hidden { display: none; }
+  .login-card {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 32px 24px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    max-width: 360px;
+    width: 100%;
+  }
+  .login-card .logo { font-size: 56px; margin-bottom: 12px; }
+  .login-card h2 { font-size: 20px; margin-bottom: 4px; }
+  .login-card .subtitle { font-size: 13px; color: var(--sub); margin-bottom: 24px; }
+  .login-card input {
+    width: 100%;
+    padding: 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    font-size: 16px;
+    text-align: center;
+    background: var(--bg);
+    outline: none;
+    margin-bottom: 12px;
+  }
+  .login-card input:focus { border-color: var(--primary); }
+  .login-card button {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .login-card button:disabled { opacity: .5; pointer-events: none; }
+  .login-card .sent { color: var(--income); font-size: 13px; margin-top: 12px; display: none; }
+  .login-card .sent.show { display: block; }
+  .logout-btn {
+    font-size: 11px;
+    color: var(--sub);
+    cursor: pointer;
+    background: none;
+    border: none;
+    margin-top: 16px;
+  }
+
+  /* ====== Statistics Page ====== */
+  .stats-section {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .stats-section h3 { font-size: 15px; margin-bottom: 16px; text-align: center; }
+  .chart-wrap { text-align: center; }
+  .chart-wrap canvas { max-width: 100%; }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--sub);
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  /* ====== Settings Page ====== */
+  .settings-section {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .settings-section h3 { font-size: 15px; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-row .label { font-size: 14px; }
+  .setting-row .actions { display: flex; gap: 8px; align-items: center; }
+  .btn-sm {
+    padding: 6px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    background: var(--card);
+    transition: .15s;
+  }
+  .btn-sm.danger { color: var(--expense); border-color: var(--expense); }
+  .btn-sm.primary { color: var(--primary); border-color: var(--primary); }
+  .btn-sm:hover { opacity: .8; }
+  .add-cat-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .add-cat-form input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+    background: var(--bg);
+    outline: none;
+  }
+  .add-cat-form input:focus { border-color: var(--primary); }
+  .add-cat-form select {
+    width: 60px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 18px;
+    text-align: center;
+    background: var(--bg);
+    cursor: pointer;
+  }
+  .add-cat-form button {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 10px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .export-btns {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .export-btns button {
+    flex: 1;
+    min-width: 100px;
+    padding: 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--card);
+    transition: .15s;
+  }
+  .export-btns button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .export-btns button.danger { color: var(--expense); border-color: var(--expense); }
+
+  /* Sync indicator */
+  .sync-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 4px;
+  }
+  .sync-dot.online { background: var(--income); }
+  .sync-dot.offline { background: #f59e0b; }
+</style>
+</head>
+<body>
+
+<!-- ==================== LOGIN SCREEN ==================== -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="logo">💰</div>
+    <h2>日常记账</h2>
+    <p class="subtitle">输入邮箱，发送魔法链接登录</p>
+    <input type="email" id="loginEmail" placeholder="your@email.com" inputmode="email" autocomplete="email">
+    <button id="loginBtn" onclick="sendMagicLink()">发送登录链接</button>
+    <p class="sent" id="loginSent">✅ 链接已发送！请检查邮箱，点击链接即可登录</p>
+    <button class="logout-btn" onclick="skipLogin()" style="margin-top:24px">跳过登录，本地使用</button>
+  </div>
+</div>
+
+<!-- ==================== MAIN APP ==================== -->
+<div class="container" id="mainApp" style="display:none">
+
+  <!-- Records Page -->
+  <div class="page active" id="pageRecords">
+    <div class="header">
+      💰 日常记账
+      <div style="font-size:11px;font-weight:400;color:var(--sub);margin-top:2px">
+        <span id="syncStatus"><span class="sync-dot online"></span>已同步</span>
+        · <span id="userEmail" style="cursor:pointer" onclick="logout()"></span>
+      </div>
+    </div>
+
+    <div class="balance-card">
+      <div class="balance-label">本月结余</div>
+      <div class="balance-amount" id="balance">¥0.00</div>
+      <div class="balance-row">
+        <div class="balance-item">
+          <div class="label">收入</div>
+          <div class="value in" id="totalIncome">¥0.00</div>
+        </div>
+        <div class="balance-item">
+          <div class="label">支出</div>
+          <div class="value out" id="totalExpense">¥0.00</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="quick-add">
+      <button class="btn-income" onclick="openModal('income')">+ 记一笔收入</button>
+      <button class="btn-expense" onclick="openModal('expense')">- 记一笔支出</button>
+    </div>
+
+    <div class="filters">
+      <button class="active" data-filter="all" onclick="setFilter('all', this)">全部</button>
+      <button data-filter="income" onclick="setFilter('income', this)">收入</button>
+      <button data-filter="expense" onclick="setFilter('expense', this)">支出</button>
+    </div>
+
+    <div class="month-summary" id="monthSummary"></div>
+    <div class="tx-list" id="txList"></div>
+  </div>
+
+  <!-- Statistics Page -->
+  <div class="page" id="pageStats">
+    <div class="header">📊 统计分析</div>
+    <div class="stats-section">
+      <h3>📂 本月支出分类</h3>
+      <div class="chart-wrap"><canvas id="pieChart" width="300" height="300"></canvas></div>
+      <div class="legend" id="pieLegend"></div>
+      <div class="empty" id="pieEmpty" style="display:none"><div class="icon">📝</div><p>本月暂无支出记录</p></div>
+    </div>
+    <div class="stats-section">
+      <h3>📅 近6个月收支趋势</h3>
+      <div class="chart-wrap"><canvas id="barChart" width="340" height="220"></canvas></div>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:var(--income)"></span>收入</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--expense)"></span>支出</div>
+      </div>
+      <div class="empty" id="barEmpty" style="display:none"><div class="icon">📝</div><p>暂无历史数据</p></div>
+    </div>
+  </div>
+
+  <!-- Settings Page -->
+  <div class="page" id="pageSettings">
+    <div class="header">⚙️ 设置</div>
+    <div class="settings-section">
+      <h3>📂 收入分类</h3>
+      <div id="incomeCatList"></div>
+      <div class="add-cat-form">
+        <select id="newIncomeIcon">
+          <option>💰</option><option>💼</option><option>💪</option><option>📈</option><option>🧧</option><option>🎁</option><option>🏆</option><option>💎</option><option>🎯</option><option>✨</option>
+        </select>
+        <input type="text" id="newIncomeName" placeholder="新分类名称" maxlength="8">
+        <button onclick="addCategory('income')">添加</button>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3>🛒 支出分类</h3>
+      <div id="expenseCatList"></div>
+      <div class="add-cat-form">
+        <select id="newExpenseIcon">
+          <option>💸</option><option>🍜</option><option>🚇</option><option>🛒</option><option>🏠</option><option>🎮</option><option>🏥</option><option>📚</option><option>☕</option><option>🐱</option><option>✈️</option><option>📱</option><option>👗</option><option>🎁</option><option>🔧</option>
+        </select>
+        <input type="text" id="newExpenseName" placeholder="新分类名称" maxlength="8">
+        <button onclick="addCategory('expense')">添加</button>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3>💾 数据管理</h3>
+      <div class="export-btns">
+        <button class="primary" onclick="exportCSV()">📥 导出 CSV</button>
+        <button onclick="document.getElementById('importFile').click()">📤 导入 CSV</button>
+        <button class="danger" onclick="clearAll()">🗑 清空数据</button>
+      </div>
+      <input type="file" id="importFile" accept=".csv" style="display:none" onchange="importCSV(event)">
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Tab Bar -->
+<div class="tab-bar" id="tabBar" style="display:none">
+  <button class="active" data-page="pageRecords" onclick="switchTab('pageRecords', this)">
+    <span class="tb-icon">📋</span>记录
+  </button>
+  <button data-page="pageStats" onclick="switchTab('pageStats', this)">
+    <span class="tb-icon">📊</span>统计
+  </button>
+  <button data-page="pageSettings" onclick="switchTab('pageSettings', this)">
+    <span class="tb-icon">⚙️</span>设置
+  </button>
+</div>
+
+<!-- Add Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modalTitle">记一笔</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="type-toggle">
+      <button id="typeIncomeBtn" onclick="setType('income')">收入</button>
+      <button id="typeExpenseBtn" onclick="setType('expense')">支出</button>
+    </div>
+    <div class="form-group" style="margin-top:16px">
+      <label>金额</label>
+      <input type="number" id="amount" placeholder="0.00" step="0.01" min="0.01" inputmode="decimal">
+    </div>
+    <div class="form-group">
+      <label>分类</label>
+      <select id="category"></select>
+    </div>
+    <div class="form-group">
+      <label>备注（可选）</label>
+      <input type="text" id="desc" placeholder="写点什么...">
+    </div>
+    <div class="form-group">
+      <label>日期</label>
+      <input type="date" id="date">
+    </div>
+    <button class="btn-save" onclick="saveTx()">保存</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ==================== CONFIG ====================
+// 替换为你的 Supabase 项目 URL 和 anon key
+// 在 Supabase Dashboard → Settings → API 中找到
+const SUPABASE_URL = 'https://jtxgwpaeeowtgpcyxvfr.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ZpOvdROUhcX2vvJPd7AvbA_48yIUqpb';
+
+// ==================== SUPABASE INIT ====================
+let supabase = null;
+let isOnline = true;
+let userId = null;
+
+try {
+  if (SUPABASE_URL) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+} catch(e) {}
+
+// ==================== DATA STORE ====================
+const DEFAULT_INCOME_CATS = [
+  { name: '工资', icon: '💼' },
+  { name: '兼职', icon: '💪' },
+  { name: '投资', icon: '📈' },
+  { name: '红包', icon: '🧧' },
+  { name: '其他收入', icon: '💰' }
+];
+const DEFAULT_EXPENSE_CATS = [
+  { name: '餐饮', icon: '🍜' },
+  { name: '交通', icon: '🚇' },
+  { name: '购物', icon: '🛒' },
+  { name: '住房', icon: '🏠' },
+  { name: '娱乐', icon: '🎮' },
+  { name: '医疗', icon: '🏥' },
+  { name: '教育', icon: '📚' },
+  { name: '其他支出', icon: '💸' }
+];
+
+let incomeCats = [...DEFAULT_INCOME_CATS];
+let expenseCats = [...DEFAULT_EXPENSE_CATS];
+let transactions = [];
+let currentType = 'expense';
+let currentFilter = 'all';
+
+function getCatIcon(catName) {
+  for (const c of [...incomeCats, ...expenseCats]) {
+    if (c.name === catName) return c.icon;
+  }
+  return '💰';
+}
+
+function formatMoney(n) {
+  if (n === 0) return '¥0.00';
+  return (n < 0 ? '-¥' : '¥') + Math.abs(n).toFixed(2);
+}
+
+function getMonthTransactions() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  return transactions.filter(t => new Date(t.date) >= start);
+}
+
+// ==================== SUPABASE DATA OPS ====================
+async function loadFromCloud() {
+  if (!supabase || !userId) return false;
+  try {
+    // Load transactions (all, up to 5000)
+    const { data: tx, error: txErr } = await supabase
+      .from('transactions')
+      .select('*')
+      .order('date', { ascending: false })
+      .limit(5000);
+    if (txErr) throw txErr;
+    transactions = tx.map(t => ({
+      id: t.id,
+      type: t.type,
+      amount: parseFloat(t.amount),
+      category: t.category,
+      desc: t.description || '',
+      date: t.date
+    }));
+    localStorage.setItem('tx', JSON.stringify(transactions));
+
+    // Load categories
+    const { data: cats, error: catErr } = await supabase
+      .from('categories')
+      .select('*')
+      .order('id');
+    if (catErr) throw catErr;
+    const incCats = cats.filter(c => c.type === 'income').map(c => ({ name: c.name, icon: c.icon }));
+    const expCats = cats.filter(c => c.type === 'expense').map(c => ({ name: c.name, icon: c.icon }));
+    if (incCats.length > 0) incomeCats = incCats;
+    if (expCats.length > 0) expenseCats = expCats;
+    localStorage.setItem('incomeCats', JSON.stringify(incomeCats));
+    localStorage.setItem('expenseCats', JSON.stringify(expenseCats));
+
+    isOnline = true;
+    return true;
+  } catch(e) {
+    console.log('Cloud load failed, using local cache:', e.message);
+    isOnline = false;
+    return false;
+  }
+}
+
+function loadFromLocal() {
+  const savedTx = localStorage.getItem('tx');
+  if (savedTx) transactions = JSON.parse(savedTx);
+  const savedInc = localStorage.getItem('incomeCats');
+  if (savedInc) incomeCats = JSON.parse(savedInc);
+  const savedExp = localStorage.getItem('expenseCats');
+  if (savedExp) expenseCats = JSON.parse(savedExp);
+  if (transactions.length === 0 && incomeCats.length === 0) {
+    incomeCats = [...DEFAULT_INCOME_CATS];
+    expenseCats = [...DEFAULT_EXPENSE_CATS];
+  }
+}
+
+async function cloudAddTx(tx) {
+  if (!supabase || !userId) return;
+  try {
+    await supabase.from('transactions').insert({
+      id: tx.id,
+      user_id: userId,
+      type: tx.type,
+      amount: tx.amount,
+      category: tx.category,
+      description: tx.desc,
+      date: tx.date
+    });
+    isOnline = true;
+  } catch(e) {
+    console.log('Cloud add failed:', e.message);
+    isOnline = false;
+  }
+}
+
+async function cloudDeleteTx(id) {
+  if (!supabase || !userId) return;
+  try {
+    await supabase.from('transactions').delete().eq('id', id);
+    isOnline = true;
+  } catch(e) {
+    console.log('Cloud delete failed:', e.message);
+    isOnline = false;
+  }
+}
+
+async function cloudClearAll() {
+  if (!supabase || !userId) return;
+  try {
+    await supabase.from('transactions').delete().eq('user_id', userId);
+    isOnline = true;
+  } catch(e) {
+    console.log('Cloud clear failed:', e.message);
+    isOnline = false;
+  }
+}
+
+async function cloudAddCategory(type, cat) {
+  if (!supabase || !userId) return;
+  try {
+    await supabase.from('categories').insert({
+      user_id: userId,
+      type,
+      name: cat.name,
+      icon: cat.icon
+    });
+    isOnline = true;
+  } catch(e) { console.log('Cloud add cat failed:', e.message); isOnline = false; }
+}
+
+async function cloudDeleteCategory(type, name) {
+  if (!supabase || !userId) return;
+  try {
+    await supabase.from('categories').delete().eq('user_id', userId).eq('type', type).eq('name', name);
+    isOnline = true;
+  } catch(e) { console.log('Cloud del cat failed:', e.message); isOnline = false; }
+}
+
+function updateSyncUI() {
+  const el = document.getElementById('syncStatus');
+  if (!supabase || !userId) {
+    el.innerHTML = '<span class="sync-dot offline"></span>离线模式';
+  } else if (isOnline) {
+    el.innerHTML = '<span class="sync-dot online"></span>已同步';
+  } else {
+    el.innerHTML = '<span class="sync-dot offline"></span>等待同步';
+  }
+}
+
+// ==================== AUTH ====================
+async function sendMagicLink() {
+  if (!supabase) {
+    showToast('请先配置 Supabase 连接');
+    return;
+  }
+  const email = document.getElementById('loginEmail').value.trim();
+  if (!email || !email.includes('@')) { showToast('请输入有效邮箱'); return; }
+
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.href }
+  });
+
+  if (error) {
+    showToast('发送失败: ' + error.message);
+    btn.disabled = false;
+    btn.textContent = '发送登录链接';
+  } else {
+    document.getElementById('loginSent').classList.add('show');
+    btn.textContent = '已发送';
+    // 本地存储邮箱以便下次使用
+    localStorage.setItem('loginEmail', email);
+  }
+}
+
+async function checkAuth() {
+  if (!supabase) {
+    // 没有配置 Supabase，直接跳过登录
+    skipLogin();
+    return;
+  }
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    userId = session.user.id;
+    document.getElementById('userEmail').textContent = session.user.email;
+    await loadFromCloud();
+    showMainApp();
+  } else {
+    // 检查 URL 中是否有 magic link 的 hash
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+      const { data: { session: newSession }, error } = await supabase.auth.getSession();
+      if (newSession) {
+        userId = newSession.user.id;
+        document.getElementById('userEmail').textContent = newSession.user.email;
+        await loadFromCloud();
+        showMainApp();
+        window.location.hash = '';
+        return;
+      }
+    }
+    // 显示登录页
+    const savedEmail = localStorage.getItem('loginEmail');
+    if (savedEmail) document.getElementById('loginEmail').value = savedEmail;
+    document.getElementById('loginScreen').classList.remove('hidden');
+  }
+}
+
+function skipLogin() {
+  userId = null;
+  loadFromLocal();
+  showMainApp();
+}
+
+function showMainApp() {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('mainApp').style.display = '';
+  document.getElementById('tabBar').style.display = '';
+  updateSyncUI();
+  updateCategorySelect();
+  renderRecords();
+  setupRealtime();
+}
+
+async function logout() {
+  if (supabase) await supabase.auth.signOut();
+  userId = null;
+  transactions = [];
+  incomeCats = [...DEFAULT_INCOME_CATS];
+  expenseCats = [...DEFAULT_EXPENSE_CATS];
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('tabBar').style.display = 'none';
+}
+
+// ==================== REAL-TIME SYNC ====================
+let realtimeChannel = null;
+
+function setupRealtime() {
+  if (!supabase || !userId) return;
+  if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+
+  realtimeChannel = supabase
+    .channel('tx-changes')
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` },
+      async () => {
+        // 另一台设备修改了数据，重新加载
+        await loadFromCloud();
+        renderRecords();
+        updateSyncUI();
+      }
+    )
+    .subscribe();
+}
+
+// ==================== RENDER ====================
+function renderRecords() {
+  const monthTx = getMonthTransactions();
+  const totalIn = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const totalOut = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const balance = totalIn - totalOut;
+
+  document.getElementById('balance').textContent = formatMoney(balance);
+  document.getElementById('balance').className = 'balance-amount ' + (balance >= 0 ? 'positive' : 'negative');
+  document.getElementById('totalIncome').textContent = formatMoney(totalIn);
+  document.getElementById('totalExpense').textContent = formatMoney(totalOut);
+
+  let list = [...transactions].reverse();
+  if (currentFilter !== 'all') list = list.filter(t => t.type === currentFilter);
+
+  const shown = currentFilter === 'all' ? monthTx : monthTx.filter(t => t.type === currentFilter);
+  const shownIn = shown.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const shownOut = shown.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  document.getElementById('monthSummary').innerHTML =
+    `<span>本月<span class="in">收 ${formatMoney(shownIn)}</span> · <span class="out">支 ${formatMoney(shownOut)}</span></span><span>${list.length} 笔记录</span>`;
+
+  const container = document.getElementById('txList');
+  if (list.length === 0) {
+    container.innerHTML = `<div class="empty"><div class="icon">📝</div><p>还没有记录，开始记账吧</p></div>`;
+  } else {
+    container.innerHTML = list.map(t => {
+      const isIncome = t.type === 'income';
+      const d = new Date(t.date);
+      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      return `
+        <div class="tx-item">
+          <div class="tx-icon ${t.type}">${getCatIcon(t.category)}</div>
+          <div class="tx-info">
+            <div class="tx-category">${t.category}</div>
+            ${t.desc ? `<div class="tx-desc">${escHtml(t.desc)}</div>` : ''}
+            <div class="tx-date">${ds}</div>
+          </div>
+          <div class="tx-right">
+            <div class="tx-amount ${t.type}">${isIncome ? '+' : '-'}${t.amount.toFixed(2)}</div>
+          </div>
+          <button class="tx-delete" onclick="deleteTx(${t.id})" title="删除">🗑</button>
+        </div>`;
+    }).join('');
+  }
+  updateSyncUI();
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ==================== CHARTS ====================
+const CHART_COLORS = ['#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316','#6366f1','#14b8a6','#e11d48','#a855f7','#0ea5e9'];
+
+function renderStats() {
+  drawPieChart();
+  drawBarChart();
+}
+
+function drawPieChart() {
+  const canvas = document.getElementById('pieChart');
+  const ctx = canvas.getContext('2d');
+  const legendEl = document.getElementById('pieLegend');
+  const emptyEl = document.getElementById('pieEmpty');
+  const wrap = canvas.parentElement;
+
+  const monthTx = getMonthTransactions().filter(t => t.type === 'expense');
+  if (monthTx.length === 0) {
+    wrap.style.display = 'none';
+    legendEl.style.display = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  wrap.style.display = '';
+  legendEl.style.display = '';
+  emptyEl.style.display = 'none';
+
+  const catMap = {};
+  let total = 0;
+  for (const t of monthTx) {
+    catMap[t.category] = (catMap[t.category] || 0) + t.amount;
+    total += t.amount;
+  }
+
+  const entries = Object.entries(catMap).sort((a,b) => b[1] - a[1]);
+  const dpr = window.devicePixelRatio || 1;
+  const size = 300;
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const cx = size / 2, cy = size / 2, outerR = 110, innerR = 60;
+  ctx.clearRect(0, 0, size, size);
+
+  let angle = -Math.PI / 2;
+  entries.forEach((entry, i) => {
+    const slice = (entry[1] / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, outerR, angle, angle + slice);
+    ctx.closePath();
+    ctx.fillStyle = CHART_COLORS[i % CHART_COLORS.length];
+    ctx.fill();
+
+    const mid = angle + slice / 2;
+    const lx = cx + Math.cos(mid) * (outerR + 20);
+    const ly = cy + Math.sin(mid) * (outerR + 20);
+    ctx.fillStyle = '#666';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.textAlign = mid > Math.PI / 2 || mid < -Math.PI / 2 ? 'right' : 'left';
+    ctx.fillText(entry[0], lx, ly + 4);
+
+    angle += slice;
+  });
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 16px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('支出', cx, cy - 4);
+  ctx.font = 'bold 14px -apple-system, sans-serif';
+  ctx.fillText('¥' + total.toFixed(0), cx, cy + 18);
+
+  legendEl.innerHTML = entries.map((e, i) =>
+    `<div class="legend-item"><span class="legend-dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></span>${e[0]} ¥${e[1].toFixed(0)}</div>`
+  ).join('');
+}
+
+function drawBarChart() {
+  const canvas = document.getElementById('barChart');
+  const ctx = canvas.getContext('2d');
+  const emptyEl = document.getElementById('barEmpty');
+  const wrap = canvas.parentElement;
+
+  if (transactions.length === 0) {
+    wrap.style.display = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  wrap.style.display = '';
+  emptyEl.style.display = 'none';
+
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      label: d.getFullYear() + '.' + (d.getMonth() + 1),
+      year: d.getFullYear(),
+      month: d.getMonth()
+    });
+  }
+
+  const data = months.map(m => {
+    let inc = 0, exp = 0;
+    for (const t of transactions) {
+      const d = new Date(t.date);
+      if (d.getFullYear() === m.year && d.getMonth() === m.month) {
+        if (t.type === 'income') inc += t.amount;
+        else exp += t.amount;
+      }
+    }
+    return { label: m.label, inc, exp };
+  });
+
+  const dpr = window.devicePixelRatio || 1;
+  const w = 340, h = 220;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const pad = { top: 16, right: 20, bottom: 32, left: 50 };
+  const chartW = w - pad.left - pad.right;
+  const chartH = h - pad.top - pad.bottom;
+  const maxVal = Math.max(...data.map(d => Math.max(d.inc, d.exp)), 1);
+  const barGap = 14;
+  const groupW = chartW / data.length;
+  const barW = (groupW - barGap) / 2;
+
+  ctx.strokeStyle = '#e5e5e5';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (chartH / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(w - pad.right, y);
+    ctx.stroke();
+    ctx.fillStyle = '#999';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('¥' + Math.round(maxVal * (1 - i / 4)), pad.left - 6, y + 4);
+  }
+
+  data.forEach((d, i) => {
+    const gx = pad.left + groupW * i;
+    const incH = (d.inc / maxVal) * chartH;
+    const expH = (d.exp / maxVal) * chartH;
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(gx, pad.top + chartH - incH, barW, incH);
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(gx + barW + barGap, pad.top + chartH - expH, barW, expH);
+    ctx.fillStyle = '#666';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(d.label, gx + groupW / 2, h - 6);
+  });
+}
+
+// ==================== SETTINGS ====================
+function renderSettings() {
+  document.getElementById('incomeCatList').innerHTML = incomeCats.map((c, i) =>
+    `<div class="setting-row">
+      <span class="label">${c.icon} ${c.name}</span>
+      <div class="actions">
+        <button class="btn-sm danger" onclick="deleteCategory('income', ${i})">删除</button>
+      </div>
+    </div>`
+  ).join('');
+  document.getElementById('expenseCatList').innerHTML = expenseCats.map((c, i) =>
+    `<div class="setting-row">
+      <span class="label">${c.icon} ${c.name}</span>
+      <div class="actions">
+        <button class="btn-sm danger" onclick="deleteCategory('expense', ${i})">删除</button>
+      </div>
+    </div>`
+  ).join('');
+}
+
+async function addCategory(type) {
+  const nameId = type === 'income' ? 'newIncomeName' : 'newExpenseName';
+  const iconId = type === 'income' ? 'newIncomeIcon' : 'newExpenseIcon';
+  const name = document.getElementById(nameId).value.trim();
+  const icon = document.getElementById(iconId).value;
+  if (!name) { showToast('请输入分类名称'); return; }
+  const cats = type === 'income' ? incomeCats : expenseCats;
+  if (cats.some(c => c.name === name)) { showToast('分类已存在'); return; }
+  const newCat = { name, icon };
+  cats.push(newCat);
+  localStorage.setItem(type === 'income' ? 'incomeCats' : 'expenseCats', JSON.stringify(cats));
+  await cloudAddCategory(type, newCat);
+  document.getElementById(nameId).value = '';
+  renderSettings();
+  showToast('已添加 ✓');
+}
+
+async function deleteCategory(type, index) {
+  const cats = type === 'income' ? incomeCats : expenseCats;
+  if (cats.length <= 1) { showToast('至少保留一个分类'); return; }
+  const removed = cats[index];
+  cats.splice(index, 1);
+  localStorage.setItem(type === 'income' ? 'incomeCats' : 'expenseCats', JSON.stringify(cats));
+  await cloudDeleteCategory(type, removed.name);
+  renderSettings();
+  updateCategorySelect();
+  showToast('已删除');
+}
+
+// ==================== TABS ====================
+function switchTab(pageId, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+  document.getElementById(pageId).classList.add('active');
+  btn.classList.add('active');
+  if (pageId === 'pageStats') renderStats();
+  if (pageId === 'pageSettings') renderSettings();
+  if (pageId === 'pageRecords') renderRecords();
+}
+
+// ==================== MODAL ====================
+function openModal(type) {
+  currentType = type;
+  document.getElementById('modalTitle').textContent = type === 'income' ? '记一笔收入' : '记一笔支出';
+  setType(type);
+  document.getElementById('amount').value = '';
+  document.getElementById('desc').value = '';
+  document.getElementById('date').value = new Date().toISOString().split('T')[0];
+  updateCategorySelect();
+  document.getElementById('modalOverlay').classList.add('active');
+  setTimeout(() => document.getElementById('amount').focus(), 300);
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modalOverlay')) return;
+  document.getElementById('modalOverlay').classList.remove('active');
+}
+
+function setType(type) {
+  currentType = type;
+  document.getElementById('typeIncomeBtn').className = type === 'income' ? 'active-income' : '';
+  document.getElementById('typeExpenseBtn').className = type === 'expense' ? 'active-expense' : '';
+  updateCategorySelect();
+}
+
+function updateCategorySelect() {
+  const cats = currentType === 'income' ? incomeCats : expenseCats;
+  document.getElementById('category').innerHTML = cats.map(c =>
+    `<option value="${c.name}">${c.icon} ${c.name}</option>`
+  ).join('');
+}
+
+async function saveTx() {
+  const amount = parseFloat(document.getElementById('amount').value);
+  if (!amount || amount <= 0) { showToast('请输入有效金额'); return; }
+  const tx = {
+    id: Date.now(),
+    type: currentType,
+    amount: Math.round(amount * 100) / 100,
+    category: document.getElementById('category').value,
+    desc: document.getElementById('desc').value.trim(),
+    date: document.getElementById('date').value
+  };
+  transactions.push(tx);
+  localStorage.setItem('tx', JSON.stringify(transactions));
+  await cloudAddTx(tx);
+  renderRecords();
+  document.getElementById('modalOverlay').classList.remove('active');
+  showToast('已保存 ✓');
+}
+
+async function deleteTx(id) {
+  transactions = transactions.filter(t => t.id !== id);
+  localStorage.setItem('tx', JSON.stringify(transactions));
+  await cloudDeleteTx(id);
+  renderRecords();
+  showToast('已删除');
+}
+
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filters button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderRecords();
+}
+
+// ==================== CSV ====================
+function exportCSV() {
+  if (transactions.length === 0) { showToast('没有数据可导出'); return; }
+  const header = '类型,金额,分类,备注,日期';
+  const rows = transactions.map(t =>
+    `${t.type === 'income' ? '收入' : '支出'},${t.amount},${t.category},"${t.desc || ''}",${t.date}`
+  );
+  const csv = '﻿' + header + '\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `日常记账_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('导出成功 ✓');
+}
+
+async function importCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const text = e.target.result;
+    const lines = text.split('\n').filter(l => l.trim());
+    if (lines.length < 2) { showToast('CSV 格式无效'); return; }
+    let imported = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const parts = parseCSVLine(lines[i]);
+      if (parts.length < 4) continue;
+      const type = parts[0].includes('收入') ? 'income' : 'expense';
+      const amount = parseFloat(parts[1]);
+      if (isNaN(amount) || amount <= 0) continue;
+      const tx = {
+        id: Date.now() + imported,
+        type,
+        amount: Math.round(amount * 100) / 100,
+        category: parts[2],
+        desc: parts[3] || '',
+        date: parts[4] || new Date().toISOString().split('T')[0]
+      };
+      transactions.push(tx);
+      await cloudAddTx(tx);
+      imported++;
+    }
+    localStorage.setItem('tx', JSON.stringify(transactions));
+    renderRecords();
+    showToast(`导入了 ${imported} 条记录 ✓`);
+  };
+  reader.readAsText(file, 'UTF-8');
+  event.target.value = '';
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (const ch of line) {
+    if (ch === '"') { inQuotes = !inQuotes; continue; }
+    if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; continue; }
+    current += ch;
+  }
+  result.push(current.trim());
+  return result;
+}
+
+async function clearAll() {
+  if (transactions.length === 0) { showToast('没有数据'); return; }
+  if (!confirm(`确定要删除全部 ${transactions.length} 条记录吗？此操作不可恢复！`)) return;
+  await cloudClearAll();
+  transactions = [];
+  localStorage.setItem('tx', JSON.stringify(transactions));
+  renderRecords();
+  renderStats();
+  showToast('已清空全部数据');
+}
+
+// ==================== TOAST ====================
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timeout);
+  t._timeout = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// ==================== INIT ====================
+document.getElementById('date').value = new Date().toISOString().split('T')[0];
+updateCategorySelect();
+
+// 注册 Service Worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+
+// 检查认证状态
+checkAuth();
+</script>
+</body>
+</html>
+
+{
+  "name": "日常记账",
+  "short_name": "记账",
+  "description": "记录日常收入和支出",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
+
+-- 在 Supabase SQL Editor 中运行以下全部语句
+
+-- 交易记录表
+CREATE TABLE transactions (
+  id BIGINT PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+  amount NUMERIC(10,2) NOT NULL,
+  category TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  date DATE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 分类表（每个用户自定义分类）
+CREATE TABLE categories (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+  name TEXT NOT NULL,
+  icon TEXT NOT NULL,
+  UNIQUE(user_id, type, name)
+);
+
+-- 索引
+CREATE INDEX idx_transactions_user ON transactions(user_id);
+CREATE INDEX idx_transactions_date ON transactions(user_id, date);
+
+-- RLS 安全策略：用户只能读写自己的数据
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "users own transactions" ON transactions
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "users own categories" ON categories
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- 新用户注册时自动创建默认分类
+CREATE OR REPLACE FUNCTION create_default_categories()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO categories (user_id, type, name, icon) VALUES
+    (NEW.id, 'income', '工资', '💼'),
+    (NEW.id, 'income', '兼职', '💪'),
+    (NEW.id, 'income', '投资', '📈'),
+    (NEW.id, 'income', '红包', '🧧'),
+    (NEW.id, 'income', '其他收入', '💰'),
+    (NEW.id, 'expense', '餐饮', '🍜'),
+    (NEW.id, 'expense', '交通', '🚇'),
+    (NEW.id, 'expense', '购物', '🛒'),
+    (NEW.id, 'expense', '住房', '🏠'),
+    (NEW.id, 'expense', '娱乐', '🎮'),
+    (NEW.id, 'expense', '医疗', '🏥'),
+    (NEW.id, 'expense', '教育', '📚'),
+    (NEW.id, 'expense', '其他支出', '💸');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION create_default_categories();
+
+-- 启用实时同步（用于跨设备同步）
+ALTER PUBLICATION supabase_realtime ADD TABLE transactions;
+
+const CACHE = 'expense-tracker-v2';
+
+// Only cache static assets, not HTML (so updates load immediately)
+const ASSETS = [
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png'
+];
+
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE).then(cache => cache.addAll(ASSETS))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(keys => Promise.all(
+      keys.filter(k => k !== CACHE).map(k => caches.delete(k))
+    ))
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', e => {
+  // Network-first for HTML — always try network first
+  if (e.request.mode === 'navigate' || e.request.destination === 'document') {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+  // Cache-first for static assets
+  e.respondWith(
+    caches.match(e.request).then(cached => cached || fetch(e.request))
+  );
+});
